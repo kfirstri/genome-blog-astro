@@ -19,7 +19,8 @@ describe('spherePos', () => {
   it('returns the pole point for a single-item sphere', () => {
     const p = spherePos(0, 1);
     expect(p.x).toBeCloseTo(0);
-    expect(p.z).toBeCloseTo(0);
+    expect(p.y).toBeCloseTo(0);
+    expect(p.z).toBeCloseTo(SHOP_R(1));
   });
 });
 

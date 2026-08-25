@@ -20,7 +20,7 @@ export function SHOP_R(productCount) {
 }
 
 export const spherePos = (i, n) => {
-  if (n <= 1) return new THREE.Vector3(0, SHOP_R(n), 0);
+  if (n <= 1) return new THREE.Vector3(0, 0, SHOP_R(n));
   const golden = Math.PI * (3 - Math.sqrt(5));
   const y = 1 - (i / (n - 1)) * 2;              // 1 -> -1
   const r = Math.sqrt(Math.max(0, 1 - y * y));

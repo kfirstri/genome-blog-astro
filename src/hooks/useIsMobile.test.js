@@ -5,7 +5,7 @@ import useIsMobile from './useIsMobile.js';
 const setWidth = (w) => { window.innerWidth = w; window.dispatchEvent(new Event('resize')); };
 
 describe('useIsMobile', () => {
-  afterEach(() => setWidth(1024));
+  afterEach(() => act(() => setWidth(1024)));
 
   it('reads the initial viewport width', () => {
     window.innerWidth = 500;

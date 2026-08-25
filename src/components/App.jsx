@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { useState, useEffect } from 'react';
 import Scene from './scene/Scene.jsx';
+import SceneErrorBoundary from './SceneErrorBoundary.jsx';
 import { loadWixPosts, loadWixProducts, getWixCart, removeWixCartItem, checkoutCurrentCart, cartItemCount } from '../lib/wix.js';
 import CartPanel from './panels/CartPanel.jsx';
 
@@ -92,14 +93,15 @@ export default function App() {
   const openCart = () => { if (window.__helix) window.__helix.openCart(); };
 
   return e('div', { style: { position: 'fixed', inset: 0, overflow: 'hidden', background: PAGE_BG, fontFamily: FONT, color: '#fff' } },
-    e(Scene, {
-      posts, products, mode: state.mode, cart: state.cart, cartOpen,
-      onModeChange: (mode) => set({ mode, selected: null }),
-      onCartChange: (next) => set((s) => ({ cart: typeof next === 'function' ? next(s.cart) : next })),
-      onSelectionChange: (selected) => set({ selected }),
-      onReady: () => set({ ready: true }),
-      onCartOpenChange: setCartOpenState,
-    }),
+    e(SceneErrorBoundary, { onError: (error) => set({ error: error && error.message ? error.message : String(error) }) },
+      e(Scene, {
+        posts, products, mode: state.mode, cart: state.cart, cartOpen,
+        onModeChange: (mode) => set({ mode, selected: null }),
+        onCartChange: (next) => set((s) => ({ cart: typeof next === 'function' ? next(s.cart) : next })),
+        onSelectionChange: (selected) => set({ selected }),
+        onReady: () => set({ ready: true }),
+        onCartOpenChange: setCartOpenState,
+      })),
 
     // ---- loader ----
     e('div', { style: {

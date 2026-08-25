@@ -15,8 +15,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@react-three/drei": "^9.99.0",
-    "@react-three/fiber": "^8.15.19",
+    "@react-three/drei": "9.99.0",
+    "@react-three/fiber": "8.15.19",
     "@wix/astro": "^2.13.0",
     "@wix/astro-pages": "^2.0.4",
     "@wix/blog": "^1",

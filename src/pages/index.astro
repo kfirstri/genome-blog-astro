@@ -1,9 +1,8 @@
 ---
 import Layout from '../layouts/Layout.astro';
+import App from '../components/App.jsx';
 import '../styles/global.css';
 ---
 <Layout>
-  <main style="display:grid;place-items:center;min-height:100vh;color:#fff;background:#07060f;font-family:sans-serif;">
-    <p>Scaffolding in place — App island lands in Task 6.</p>
-  </main>
+  <App client:only="react" />
 </Layout>

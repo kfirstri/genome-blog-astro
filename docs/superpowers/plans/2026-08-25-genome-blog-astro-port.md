@@ -32,9 +32,12 @@
 **Interfaces:**
 - Produces: `src/styles/global.css` — imported by `src/pages/index.astro` in every later task; defines `@font-face` for "Space Grotesk", the `helix-spin`/`helix-fade`/`helix-pulse` keyframes, and the `@media (max-width: 719px)` mobile rules for `.gx-logo`/`.gx-sub`/`.gx-topbar`/`.gx-hint`.
 
-- [ ] **Step 1: Add the React integration**
+- [ ] **Step 1: Add the React integration, pinned to React 18**
 
-Run: `npx astro add react -y` from `genome-blog-astro/` — this installs `@astrojs/react` and a compatible `react`/`react-dom`, and edits `astro.config.mjs` to add `react()` to `integrations`.
+Run: `npx astro add react -y` from `genome-blog-astro/` — this installs `@astrojs/react` and edits `astro.config.mjs` to add `react()` to `integrations`. It will likely install the latest `react`/`react-dom` (React 19), which is **not** compatible with `@react-three/fiber@8.15.19` (built for React 18's peer deps). Immediately after, pin them down to match the original design's exact versions:
+```bash
+npm install react@18.2.0 react-dom@18.2.0
+```
 
 - [ ] **Step 2: Add the remaining runtime dependencies**
 
@@ -338,7 +341,7 @@ git commit -m "Port helix/sphere node-layout geometry with unit tests"
 - Produces: five React components, each taking a `morphRef: {current: number}` prop (a ref holding the 0→1 blog↔shop morph amount, read every frame — not React state, to avoid re-renders at 60fps):
   - `<Strand off={number} morphRef />`
   - `<Rung a={Vector3} b={Vector3} color={string} morphRef />`
-  - `<Node node={NodeData} morphRef mode={"blog"|"shop"} onSelect={(index, worldPos) => void} active={boolean} />` — internally renders `<ProductCard>`/`<PostCard>` when `active`, so it also consumes those two (Task 5) and the module-level `onDeselectGlobal` mutable binding and `addToWixCart` from `./geometry.js`'s sibling `../../lib/wix.js` (Task 2).
+  - `<Node node={NodeData} morphRef mode={"blog"|"shop"} onSelect={(index, worldPos) => void} active={boolean} onCartChange={(next: number | ((prev: number) => number)) => void} />` — internally renders `<ProductCard>`/`<PostCard>` when `active`, so it also consumes those two (Task 5), `rbcGeo`/`sphereGeo` from `./geometry.js` (Task 3), and `addToWixCart` from `../../lib/wix.js` (Task 2). Also exports `onDeselectGlobalRef` (see Step 3).
   - `<StarField morphRef />`
   - `<SkyDome morphRef />`
   - `<CloudLayer morphRef />`
@@ -389,17 +392,22 @@ import { Html } from '@react-three/drei';
 import ProductCard from '../panels/ProductCard.jsx';
 import PostCard from '../panels/PostCard.jsx';
 import { addToWixCart } from '../../lib/wix.js';
+import { rbcGeo, sphereGeo } from './geometry.js';
 
 const e = React.createElement;
 const lerp = (a, b, t) => a + (b - a) * t;
 const clamp01 = (x) => Math.max(0, Math.min(1, x));
 
-export let onDeselectGlobal = () => {};
-export default function Node({ node, morphRef, mode, onSelect, active }) { /* unchanged body */ }
+// `Scene.jsx` (Task 6) sets `.current` to the real deselect handler once it mounts; `Node`
+// calls through the ref object rather than a plain exported `let` because ES module bindings
+// can't be reassigned from an importing module (`onDeselectGlobalRef = x` in Scene.jsx would be
+// a build error) — mutating a property on a shared object works across the module boundary.
+export const onDeselectGlobalRef = { current: () => {} };
+export default function Node({ node, morphRef, mode, onSelect, active, onCartChange }) { /* unchanged body */ }
 ```
 Two required edits inside the body:
-1. `self.setState({ cart: n })` (original line 504, inside the `ProductCard`'s `onAdd`) and the catch's `self.setState((s) => ({ cart: s.cart + 1 }))` — `self` doesn't exist in this file anymore. `Node` needs an `onCartChange: (nextCount) => void` prop; add it to the destructured props and call `onCartChange(n)` / `onCartChange(prevCountFn)` instead of `self.setState(...)`. Update the **Interfaces** line above and this task's prop list to include `onCartChange`.
-2. `onDeselectGlobal` becomes the module-level exported `let` shown above (set by `Scene.jsx` in Task 6, same pattern as the original — just now via an ES export instead of a closure variable).
+1. `self.setState({ cart: n })` (original line 504, inside the `ProductCard`'s `onAdd`) and the catch's `self.setState((s) => ({ cart: s.cart + 1 }))` — `self` doesn't exist in this file anymore. Call `onCartChange(n)` / `onCartChange((s) => s + 1)` instead of `self.setState(...)`.
+2. Every call site of `onDeselectGlobal()` (e.g. `onClose: () => onDeselectGlobal()` at original line 503) becomes `onClose: () => onDeselectGlobalRef.current()`.
 
 - [ ] **Step 4: Port `StarField.jsx`, `SkyDome.jsx`, `CloudLayer.jsx`**
 
@@ -669,7 +677,7 @@ Copy lines **703–815** of `.unbundled/src/app.js` (the `Scene` function throug
    import { CameraControls, Html, Environment, Lightformer } from '@react-three/drei';
    import Strand from './Strand.jsx';
    import Rung from './Rung.jsx';
-   import Node, { onDeselectGlobal as _setOnDeselectGlobal } from './Node.jsx';
+   import Node, { onDeselectGlobalRef } from './Node.jsx';
    import StarField from './StarField.jsx';
    import SkyDome from './SkyDome.jsx';
    import CloudLayer from './CloudLayer.jsx';
@@ -683,12 +691,13 @@ Copy lines **703–815** of `.unbundled/src/app.js` (the `Scene` function throug
    const hSkyA = new THREE.Color('#9fb2ff'), hSkyB = new THREE.Color('#eaf6ff');
    const hGndA = new THREE.Color('#0a0a16'), hGndB = new THREE.Color('#5b7fae');
    ```
-   `onDeselectGlobal` can't be reassigned through an ES import binding — instead of `onDeselectGlobal = onDeselect;` (original line 737), `Node.jsx` (Task 4) should export a **setter**, not a `let`: change `Node.jsx`'s export to `export let onDeselectGlobalRef = { current: () => {} };` and have `Node` call `onDeselectGlobalRef.current()`; then here in `Scene.jsx`, `useEffect(() => { onDeselectGlobalRef.current = onDeselect; });` (mutate the object's property, which works across the module boundary). Go back and apply this exact pattern in Task 4's `Node.jsx` before finishing this step — replace every reference here and in `Node.jsx` accordingly.
+   `Node.jsx` (Task 4) already exports `onDeselectGlobalRef` as `{ current: () => {} }`; here, set its `.current` once `onDeselect` exists: `useEffect(() => { onDeselectGlobalRef.current = onDeselect; });` (original line 737's `onDeselectGlobal = onDeselect;`, adapted — mutating the ref object's property works across the module boundary; reassigning the imported binding itself would be a build error).
 2. `Scene` receives props from `App.jsx` instead of reaching for closure variables: `function Scene({ posts, products, mode, onModeChange, cart, onCartChange, onSelectionChange, onReady, cartOpen, onCartOpenChange })`. Replace:
    - `POSTS`/`PRODUCTS` (module vars in the original) → the `posts`/`products` props, passed into `buildNodes(posts, products)` (compute `nodes` once with `useMemo(() => buildNodes(posts, products), [posts, products])`, replacing the original's plain `const nodes = [...]` since it's now inside a function component that can re-render).
    - Every `self.setState({ ... })` call → the corresponding `on*` callback prop (`self.setState({ mode: next, selected: null })` → `onModeChange(next); onSelectionChange(null);`, `self.setState({ selected: ... })` → `onSelectionChange(...)`, `self.setState({ cart: n })` inside cart flows → `onCartChange(n)`).
    - `self.state.mode` (in `home: () => applyMode(self.state.mode)`) → the `mode` prop.
    - `onCreated: () => { self.setState({ ready: true }); }` → `onCreated: () => onReady()`.
+   - The `e(Node, { key: n.index, node: n, morphRef, mode, onSelect, active: ... })` call (original line ~730, inside `SceneInner`'s `nodes.map(...)`) must add `onCartChange` to that props object — `Node`'s `ProductCard`/"add to cart" flow (Task 4) depends on receiving it.
 3. Drop the final two lines (`const root = ReactDOMClient.createRoot(this.hostEl); ... root.render(e(Canvas, {...}, e(Scene)));`) entirely — `Scene`'s `export default function Scene(props) { ... return e(Canvas, { ...(same args, minus onCreated's self reference) }, e(SceneInner)); }`. Concretely: rename the original inner `function Scene()` to `SceneInner` (it becomes the thing rendered *inside* `<Canvas>`), and make the new default-exported `Scene` the component that renders `<Canvas dpr={[1, 1.75]} camera={{...}} gl={{...}} onPointerMissed={...} onCreated={onReady}><SceneInner .../></Canvas>` directly as JSX-via-`e(...)`, forwarding all the props listed in point 2 down to `SceneInner`.
 
 - [ ] **Step 5: Build `App.jsx`'s chrome JSX and state**

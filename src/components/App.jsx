@@ -49,13 +49,17 @@ export default function App() {
   const [state, setState] = useState({ ready: false, error: null, selected: null, mode: 'blog', cart: 0 });
   const [posts, setPosts] = useState([]);
   const [products, setProducts] = useState([]);
+  const [contentLoaded, setContentLoaded] = useState(false);
   const [cartData, setCartData] = useState(null);
   const [cartOpen, setCartOpen] = useState(false);
   const [checkingOut, setCheckingOut] = useState(false);
   const set = (patch) => setState((s) => ({ ...s, ...(typeof patch === 'function' ? patch(s) : patch) }));
 
   // Boot: fetch the live Wix content (blog posts + store products). Each side degrades to an
-  // empty list on failure, exactly as the original `boot()` did.
+  // empty list on failure, exactly as the original `boot()` did. `contentLoaded` flips once
+  // this settles either way (success or the per-side `.catch(() => [])` fallback) — the
+  // original never mounted the scene / began fading the loader until this fetch had resolved,
+  // so `ready` below is gated on it too instead of on the canvas mount alone.
   useEffect(() => {
     let cancelled = false;
     Promise.all([
@@ -65,11 +69,16 @@ export default function App() {
       if (cancelled) return;
       console.log(`[Genome] Rendering ${p.length} post(s) + ${pr.length} product(s).`);
       setPosts(p); setProducts(pr);
+      setContentLoaded(true);
     }).catch((err) => { if (!cancelled) set({ error: err && err.message ? err.message : String(err) }); });
     return () => { cancelled = true; };
   }, []);
 
-  const cp = chromeProps(state);
+  // The scene is only "revealed" (loader fades, hint/cart chrome appears) once BOTH the canvas
+  // has mounted (`state.ready`, set by Scene's `onReady`) AND the Wix content fetch above has
+  // settled (`contentLoaded`) — matching the original, which never rendered the scene until
+  // `wixContentPromise` resolved. `error` still surfaces independently of `contentLoaded`.
+  const cp = chromeProps({ ...state, ready: state.ready && contentLoaded });
   const refreshCart = () => getWixCart().then((c) => { setCartData(c); set({ cart: cartItemCount(c) }); });
   // One code path for opening/closing the cart, whether it comes from the chrome's Cart button
   // or from inside the scene (`window.__helix.openCart`).

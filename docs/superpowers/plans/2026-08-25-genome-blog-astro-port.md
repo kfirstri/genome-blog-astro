@@ -4,7 +4,7 @@
 
 **Goal:** Port the imperative GENOME design (`../genome-blog/designs/genome-blog.html`, already unbundled to `.unbundled/`) into a native Astro+React Wix Headless app with full feature parity (3D DNA-helix blog, shop morph, cart, checkout).
 
-**Architecture:** One Astro page (`src/pages/index.astro`) renders a single React island (`src/components/App.jsx`, `client:load`). `App` owns all state (mode, selection, cart) and renders the chrome (logo, toggle, cart button, loader, error state) as real JSX; a nested `<Scene>` (React Three Fiber `<Canvas>`) renders the helix/sphere of `Node`s, mounted as a normal child — not a second manual `ReactDOMClient.createRoot()` call like the original. Pure logic (Wix content/cart helpers, node-layout math, mobile detection) is split into small testable modules; the 3D primitives and chrome layout are ported verbatim from `.unbundled/src/app.js` with only the mechanical edits listed per task (esm.sh → npm imports, template bindings → JSX).
+**Architecture:** One Astro page (`src/pages/index.astro`) renders a single React island (`src/components/App.jsx`, `client:only="react"` — SSR is skipped because `CloudLayer.jsx` touches `document` at module scope). `App` owns all state (mode, selection, cart) and renders the chrome (logo, toggle, cart button, loader, error state) as real JSX; a nested `<Scene>` (React Three Fiber `<Canvas>`) renders the helix/sphere of `Node`s, mounted as a normal child — not a second manual `ReactDOMClient.createRoot()` call like the original. Pure logic (Wix content/cart helpers, node-layout math, mobile detection) is split into small testable modules; the 3D primitives and chrome layout are ported verbatim from `.unbundled/src/app.js` with only the mechanical edits listed per task (esm.sh → npm imports, template bindings → JSX).
 
 **Tech Stack:** Astro 5, `@astrojs/react`, React 18, Three.js 0.160, `@react-three/fiber` 8.15, `@react-three/drei` 9.99, `@wix/sdk`/`@wix/blog`/`@wix/stores`/`@wix/ecom`/`@wix/redirects` v1, Vitest + jsdom + Testing Library for the parts worth unit-testing.
 
@@ -782,6 +782,8 @@ git commit -m "Compose Scene.jsx and App.jsx: chrome JSX, state, and Wix boot se
 
 - [ ] **Step 1: Wire the real page**
 
+`CloudLayer.jsx` (Task 4) builds a canvas-2D texture at module scope — importing it during Astro's server render (which `client:load` still does before hydrating) would crash with `document is not defined`. Use `client:only="react"` instead, which skips SSR for this island entirely (there's no SSR-meaningful fallback content to lose here anyway — this app has no server-rendered blog list, per the spec's explicit no-SSR-changes scope).
+
 ```astro
 ---
 import Layout from '../layouts/Layout.astro';
@@ -789,7 +791,7 @@ import App from '../components/App.jsx';
 import '../styles/global.css';
 ---
 <Layout>
-  <App client:load />
+  <App client:only="react" />
 </Layout>
 ```
 

@@ -1,10 +1,17 @@
 ---
-// Placeholder page. `convert.mjs` overwrites this with the converted design:
-// it imports the Layout, the generated global stylesheet, and the App island.
 import Layout from '../layouts/Layout.astro';
+import App from '../components/App.jsx';
+import { loadWixPosts, loadWixProducts } from '../lib/wix.js';
+import '../styles/global.css';
+
+// Fetched server-side (the Astro integration authenticates this automatically) and passed
+// into the client:only island as props, so the helix/shop scene never mounts empty and then
+// pops in content after a client-side fetch — the data is already there at hydration.
+const [posts, products] = await Promise.all([
+  loadWixPosts().catch((err) => { console.error('[Genome] Wix Blog load failed:', err); return []; }),
+  loadWixProducts().catch((err) => { console.error('[Genome] Wix Stores load failed:', err); return []; }),
+]);
 ---
 <Layout>
-  <main style="display:grid;place-items:center;min-height:100vh;font-family:sans-serif;">
-    <p>Empty template — run <code>convert.mjs</code> to generate the page.</p>
-  </main>
+  <App client:only="react" posts={posts} products={products} />
 </Layout>

@@ -1,13 +1,11 @@
-import { createClient, OAuthStrategy } from '@wix/sdk';
+// The Wix Astro integration authenticates every SDK call automatically (visitor session
+// management + token handling happen in its request middleware / browser runtime setup) —
+// no client, no OAuthStrategy. Import a module and call its methods directly.
 import { posts } from '@wix/blog';
 import { products } from '@wix/stores';
 import { currentCart } from '@wix/ecom';
 import { redirects } from '@wix/redirects';
 
-let POSTS = [];      // loaded live from Wix Blog at boot
-let PRODUCTS = [];   // loaded live from Wix Stores at boot
-
-const WIX_CLIENT_ID = "aeaf7384-b3da-41d1-ada2-2631e14141f1";
 const WIX_STORES_APP_ID = "215238eb-22a5-4c36-9e7b-e7c08025e04e";
 
 // Per-post styling (tag + node colour) keyed by title, so known posts keep a designed look.
@@ -124,22 +122,10 @@ export function ricosToHtml(rc, accent) {
   return walk(rc.nodes);
 }
 
-// One shared browser SDK client (anonymous visitor session) for blog + stores + cart.
-let _wixClient = null;
-export async function getWix() {
-  if (_wixClient) return _wixClient;
-  _wixClient = createClient({
-    modules: { posts, products, currentCart, redirects },
-    auth: OAuthStrategy({ clientId: WIX_CLIENT_ID })
-  });
-  return _wixClient;
-}
-
 // Blog posts (with full rich content requested in the single CORS-safe list query).
 export async function loadWixPosts() {
   console.log("[Genome] Fetching posts from Wix Blog…");
-  const client = await getWix();
-  const res = await client.posts.queryPosts({ fieldsets: ["RICH_CONTENT", "CONTENT_TEXT"] }).limit(100).find();
+  const res = await posts.queryPosts({ fieldsets: ["RICH_CONTENT", "CONTENT_TEXT"] }).limit(100).find();
   const items = res.items || res.posts || [];
   console.log("[Genome] Wix Blog returned " + items.length + " published post(s).");
   return items.map((p, i) => {
@@ -160,8 +146,7 @@ export async function loadWixPosts() {
 // Store products (Catalog V1: name, formatted price, main image, HTML description).
 export async function loadWixProducts() {
   console.log("[Genome] Fetching products from Wix Stores…");
-  const client = await getWix();
-  const res = await client.products.queryProducts().limit(100).find();
+  const res = await products.queryProducts().limit(100).find();
   const items = res.items || res.products || [];
   console.log("[Genome] Wix Stores returned " + items.length + " product(s).");
   return items.map((p, i) => {
@@ -176,8 +161,7 @@ export async function loadWixProducts() {
 
 // Add a product to the visitor's real Wix cart; returns the new total item count.
 export async function addToWixCart(productId) {
-  const client = await getWix();
-  const r = await client.currentCart.addToCurrentCart({ lineItems: [{ catalogReference: { appId: WIX_STORES_APP_ID, catalogItemId: productId }, quantity: 1 } ] });
+  const r = await currentCart.addToCurrentCart({ lineItems: [{ catalogReference: { appId: WIX_STORES_APP_ID, catalogItemId: productId }, quantity: 1 } ] });
   const cart = r.cart || r;
   return (cart.lineItems || []).reduce((n, li) => n + (li.quantity || 1), 0);
 }
@@ -186,23 +170,20 @@ export function cartItemCount(cart) { return ((cart && cart.lineItems) || []).re
 
 // Read the visitor's current cart (empty shape if none exists yet).
 export async function getWixCart() {
-  const client = await getWix();
-  try { return await client.currentCart.getCurrentCart(); } catch (e) { return { lineItems: [] }; }
+  try { return await currentCart.getCurrentCart(); } catch (e) { return { lineItems: [] }; }
 }
 
 export async function removeWixCartItem(lineItemId) {
-  const client = await getWix();
-  const r = await client.currentCart.removeLineItemsFromCurrentCart([lineItemId]);
+  const r = await currentCart.removeLineItemsFromCurrentCart([lineItemId]);
   return r.cart || r;
 }
 
 // Create a checkout from the current cart and redirect the visitor to Wix's hosted checkout page.
 // (currentCart.createCheckoutFromCurrentCart -> redirects.createRedirectSession -> location.href)
 export async function checkoutCurrentCart() {
-  const client = await getWix();
-  const co = await client.currentCart.createCheckoutFromCurrentCart({ channelType: "WEB" });
+  const co = await currentCart.createCheckoutFromCurrentCart({ channelType: "WEB" });
   const checkoutId = co.checkoutId || (co.checkout && co.checkout._id) || co._id;
-  const rs = await client.redirects.createRedirectSession({
+  const rs = await redirects.createRedirectSession({
     ecomCheckout: { checkoutId: checkoutId },
     callbacks: { postFlowUrl: window.location.href, thankYouPageUrl: window.location.href }
   });
